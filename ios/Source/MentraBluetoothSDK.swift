@@ -642,6 +642,20 @@ public final class MentraBluetoothSDK {
         DeviceManager.shared.displayEvent(request.values)
     }
 
+    /// Ghost fork: draw a scene on the main view (the display.render() pipeline): positioned elements
+    /// `["id", "type": "text"|"rect"|"image", "box": ["x","y","w","h"], "text", "data": base64 PNG,
+    ///   "style": ["border","radius"], "change": "created"|"updated"|"unchanged"]`
+    /// plus `appId`, `replay` (repaint everything) and `removed` (ids to delete).
+    /// G2: max 6 text/rect and 4 image containers; images are split into tiles of max 200x100.
+    public func displayScene(
+        appId: String, elements: [[String: Any]], removed: [String] = [], replay: Bool = false
+    ) {
+        DeviceManager.shared.displayEvent([
+            "view": "main",
+            "scene": ["appId": appId, "elements": elements, "removed": removed, "replay": replay],
+        ])
+    }
+
     public func clearDisplay() async throws {
         DeviceManager.shared.sgc?.clearDisplay()
     }
