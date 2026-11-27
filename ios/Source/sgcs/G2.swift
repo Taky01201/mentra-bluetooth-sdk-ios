@@ -4800,7 +4800,10 @@ class G2: NSObject, SGCManager {
                 setControllerFullyConnected()
             }
 
-            if eventType == .doubleClick {
+            // Ghost fork: the double-tap dashboard toggle is opt-in (store "bluetooth"/"double_tap_dashboard").
+            // In Ghost OS double tap means "back"; toggling headUp swapped Ghost's screen for the dashboard view.
+            if eventType == .doubleClick,
+               DeviceStore.shared.get("bluetooth", "double_tap_dashboard") as? Bool ?? false {
                 // trigger dashboard:
                 let isHeadUp = DeviceStore.shared.get("glasses", "headUp") as? Bool ?? false
 
