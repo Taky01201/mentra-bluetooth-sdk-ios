@@ -2406,6 +2406,11 @@ class G2: NSObject, SGCManager {
         // y is clamped first so the height term can't go negative.
         let y = min(max(y, 0), 288 - G2.minTextContainerHeight)
         let height = min(max(height, G2.minTextContainerHeight), 288 - y)
+        // Ghost fork: a scene box WITH a border needs a visible border colour (0 = off on the G2).
+        // Store "bluetooth"/"scene_border_color" (default 15, the brightest of 4-bit).
+        let sceneBorderColor: Int32 = borderWidth > 0
+            ? Int32(DeviceStore.shared.get("bluetooth", "scene_border_color") as? Int ?? 15)
+            : G2.defaultTextContainer.borderColor
         let content = G2Text.containerContent(text)
         if let existingId = sceneTextByElement[elementId] {
             if let i = textContainers.firstIndex(where: { $0.id == existingId }) {
@@ -2425,7 +2430,7 @@ class G2: NSObject, SGCManager {
                 // Moved/restyled: recreate at the SAME container id (structural).
                 textContainers[i] = TextContainer(
                     id: existingId, x: x, y: y, width: width, height: height, content: content,
-                    borderWidth: borderWidth, borderColor: G2.defaultTextContainer.borderColor,
+                    borderWidth: borderWidth, borderColor: sceneBorderColor,
                     borderRadius: borderRadius, paddingLength: G2.defaultTextContainer.paddingLength,
                     pendingSends: 1 + EVEN_HUB_RESEND_COUNT
                 )
@@ -2439,12 +2444,12 @@ class G2: NSObject, SGCManager {
 
         await sendTextAt(
             content, x: x, y: y, width: width, height: height,
-            borderWidth: borderWidth, borderRadius: borderRadius
+            borderWidth: borderWidth, borderColor: sceneBorderColor, borderRadius: borderRadius
         )
         if let i = textContainers.firstIndex(where: {
             $0.matches(
                 x: x, y: y, width: width, height: height, borderWidth: borderWidth,
-                borderColor: G2.defaultTextContainer.borderColor, borderRadius: borderRadius,
+                borderColor: sceneBorderColor, borderRadius: borderRadius,
                 paddingLength: G2.defaultTextContainer.paddingLength
             )
         }) {
