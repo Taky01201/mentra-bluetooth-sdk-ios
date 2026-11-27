@@ -1641,6 +1641,11 @@ class G2: NSObject, SGCManager {
     /// The page may hold at most 4 image containers (IDs from the pool below).
     private var imageContainers: [ImgContainer] = []
     private var textContainers: [TextContainer] = []
+    /// Ghost: containers removed since the last in-place rebuild. The G2 does NOT erase a container that a
+    /// rebuildPageMessage leaves out (its old pixels stay on the lens), so the next in-place rebuild first
+    /// sends them once more, EMPTY (the firmware blanks them), then rebuilds without them.
+    private var ghostRemovedText: [TextContainer] = []
+    private var ghostRemovedImages: [ImgContainer] = []
     /// Fixed pool of container IDs the page protocol expects.
     private let imageContainerIDPool: [Int32] = [10, 11, 12, 13]
     private let textContainerIDPool: [Int32] = [1, 2, 3, 4, 5, 6]
@@ -2342,9 +2347,17 @@ class G2: NSObject, SGCManager {
             // so no picture is pushed into a container the firmware hasn't created yet.
             Bridge.log("G2: structural change — in-place rebuild (no shutdown)")
             for i in imageContainers.indices { imageContainers[i].dirty = false }
+            if !ghostRemovedText.isEmpty || !ghostRemovedImages.isEmpty {
+                createPageWithContainers(withRemoved: true)
+                ghostRemovedText.removeAll()
+                ghostRemovedImages.removeAll()
+                try? await Task.sleep(nanoseconds: 250_000_000)
+            }
             await rebuildState()
         } else {
             Bridge.log("G2: structural change while page down — deferring to reconcile rebuild (no extra shutdown)")
+            ghostRemovedText.removeAll()   // a page that is down has nothing left to erase
+            ghostRemovedImages.removeAll()
             signalDisplayDirty()
         }
     }
@@ -2406,6 +2419,8 @@ class G2: NSObject, SGCManager {
         // the element mapping so creates re-match/re-register cleanly.
         sceneTextByElement.removeAll()
         sceneImageByElement.removeAll()
+        ghostRemovedText.removeAll()
+        ghostRemovedImages.removeAll()
     }
 
     func drawLayoutText(
@@ -2579,6 +2594,9 @@ class G2: NSObject, SGCManager {
         if let id = sceneTextByElement.removeValue(forKey: elementId),
            let i = textContainers.firstIndex(where: { $0.id == id })
         {
+            var gone = textContainers[i]
+            gone.content = ""
+            ghostRemovedText.append(gone)
             textContainers.remove(at: i)
             await requestPageRebuild()
         }
@@ -2587,6 +2605,7 @@ class G2: NSObject, SGCManager {
                 if let i = imageContainers.firstIndex(where: { $0.id == id }),
                    !imageContainers[i].bmpData.isEmpty
                 {
+                    ghostRemovedImages.append(imageContainers[i])
                     imageContainers[i].bmpData = Data()
                     imageContainers[i].dirty = true
                 }
@@ -3473,7 +3492,7 @@ class G2: NSObject, SGCManager {
 
     // MARK: - Private Display Helpers
 
-    private func createPageWithContainers() {
+    private func createPageWithContainers(withRemoved: Bool = false) {
         // Dedicated event-capture container: id 0, 1x1, borderless, empty — the
         // designated event-capture slot per the RE demos ("container 0 is
         // event-capture"). Touch events keep flowing through it, and no REAL
@@ -3532,11 +3551,34 @@ class G2: NSObject, SGCManager {
         }
 
         // Build the page's image containers from the live tracked list.
-        let imageContainerProps: [Data] = imageContainers.map { c in
+        var imageContainerProps: [Data] = imageContainers.map { c in
             EvenHubProto.imageContainerProperty(
                 x: c.x, y: c.y, width: c.width, height: c.height,
                 containerID: c.id, containerName: c.name
             )
+        }
+        // Ghost: the "erase" pass of an in-place rebuild: removed containers once more, empty.
+        if withRemoved {
+            let usedText = Set(textContainers.map(\.id)), usedImg = Set(imageContainers.map(\.id))
+            for c in ghostRemovedText where !usedText.contains(c.id) {
+                textContainerProps.append(
+                    EvenHubProto.textContainerProperty(
+                        x: c.x, y: c.y, width: c.width, height: c.height,
+                        borderWidth: 0, borderColor: 0, borderRadius: 0,
+                        paddingLength: c.paddingLength, containerID: c.id,
+                        containerName: c.name, isEventCapture: false, content: ""
+                    )
+                )
+            }
+            for c in ghostRemovedImages where !usedImg.contains(c.id) {
+                imageContainerProps.append(
+                    EvenHubProto.imageContainerProperty(
+                        x: c.x, y: c.y, width: c.width, height: c.height,
+                        containerID: c.id, containerName: c.name
+                    )
+                )
+            }
+            Bridge.log("G2: erase pass — \(ghostRemovedText.count) text + \(ghostRemovedImages.count) image container(s) sent empty")
         }
 
         let msg: Data
