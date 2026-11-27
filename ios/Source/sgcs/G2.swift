@@ -4987,7 +4987,8 @@ class G2: NSObject, SGCManager {
         {
             return
         }
-        // Bridge.log("G2: DevSettings response cmdValue=\(cmdValue)")
+        // Ghost: log every non-heartbeat DevSettings packet (looking for the "glasses put on / taken off" signal).
+        Bridge.log("G2: DevSettings \(sourceKey) cmd=\(cmdValue) hex=\(data.prefix(48).map { String(format: "%02X", $0) }.joined())")
 
         // Bridge.log(
         //     "G2: DevSettings response: \(data.prefix(32).map { String(format: "%02X", $0) }.joined(separator: ":"))"
@@ -5089,7 +5090,8 @@ class G2: NSObject, SGCManager {
         var reader = ProtobufReader(payload)
         let fields = reader.parseFields()
 
-        // Bridge.log("G2: G2Setting response: \(fields)")
+        // Ghost: log every G2Setting packet (looking for the "glasses put on / taken off" signal).
+        Bridge.log("G2: G2Setting cmd=\(fields[1] as? Int32 ?? -1) hex=\(payload.prefix(48).map { String(format: "%02X", $0) }.joined())")
 
         guard let cmdValue = fields[1] as? Int32 else { return }
 
