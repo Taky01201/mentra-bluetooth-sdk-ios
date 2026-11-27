@@ -4802,11 +4802,12 @@ class G2: NSObject, SGCManager {
                 lastImuReportTimestamp = timestamp
                 let shouldForwardSamples =
                     DeviceStore.shared.get("bluetooth", "imu_enabled") as? Bool ?? false
-                if shouldForwardSamples,
-                   let imuData = sysFields[3] as? Data,
+                // Ghost: forward the keepalive samples too (~1/s, already arriving): the app uses them to notice
+                // the glasses being put on (still on a table → moving on a head). Logged only when requested.
+                if let imuData = sysFields[3] as? Data,
                    let imu = parseImuReportData(imuData)
                 {
-                    Bridge.log("G2: IMU data report: \(imu.x), \(imu.y), \(imu.z)")
+                    if shouldForwardSamples { Bridge.log("G2: IMU data report: \(imu.x), \(imu.y), \(imu.z)") }
                     Bridge.sendAccelEvent(x: imu.x, y: imu.y, z: imu.z, timestamp: timestamp)
                 }
                 return
