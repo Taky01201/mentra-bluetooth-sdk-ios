@@ -1646,6 +1646,37 @@ class G2: NSObject, SGCManager {
     /// sends them once more, EMPTY (the firmware blanks them), then rebuilds without them.
     private var ghostRemovedText: [TextContainer] = []
     private var ghostRemovedImages: [ImgContainer] = []
+    /// Ghost: until this time (ms) the system_exit / dashboard-close that our own page reset causes is ignored.
+    private var ghostResetUntilMs: Int64 = 0
+    private var ghostResetExitSeen = false
+    /// Ghost: the scene text element that receives touches (the firmware then scrolls its text itself).
+    /// nil = the usual hidden 1x1 touch box.
+    private var ghostCaptureElementId: String?
+
+    /// Ghost: a FULL page reset (shutdown → the lens is really cleared), for switching between layouts.
+    /// An in-place rebuild never erases left-out boxes on the G2, so a layout change needs this.
+    /// Waits for the firmware's system_exit (max 1.2 s) and ignores the exit / dashboard-close it causes,
+    /// so the SDK doesn't rebuild the old page in between. The app then sends its new frame (replay).
+    func ghostResetPage(captureElementId: String?) async {
+        guard connectionSession.isReady, !isDisconnecting else { return }
+        Bridge.log("G2: ghost page reset (capture=\(captureElementId ?? "none"))")
+        ghostCaptureElementId = captureElementId
+        ghostResetExitSeen = false
+        ghostResetUntilMs = Int64(Date().timeIntervalSince1970 * 1000) + 2500
+        sendEvenHubCommand(EvenHubProto.shutdownMessage())
+        pageCreated = false
+        textContainers.removeAll()
+        imageContainers.removeAll()
+        sceneTextByElement.removeAll()
+        sceneImageByElement.removeAll()
+        ghostRemovedText.removeAll()
+        ghostRemovedImages.removeAll()
+        for _ in 0 ..< 24 where !ghostResetExitSeen {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+        Bridge.log("G2: ghost page reset — exit seen: \(ghostResetExitSeen)")
+        try? await Task.sleep(nanoseconds: 150_000_000)
+    }
     /// Fixed pool of container IDs the page protocol expects.
     private let imageContainerIDPool: [Int32] = [10, 11, 12, 13]
     private let textContainerIDPool: [Int32] = [1, 2, 3, 4, 5, 6]
@@ -3500,7 +3531,10 @@ class G2: NSObject, SGCManager {
         // be first (the old behavior) painted a visible artifact once pages
         // stopped being one full-screen box — the stray line Alex saw
         // persisting across miniapps.
-        var textContainerProps: [Data] = [
+        // Ghost: a scene text element may take the touches itself (firmware scrolling); then no hidden box.
+        let captureId = ghostCaptureElementId.flatMap { sceneTextByElement[$0] }
+            .flatMap { id in textContainers.contains(where: { $0.id == id }) ? id : nil }
+        var textContainerProps: [Data] = captureId != nil ? [] : [
             EvenHubProto.textContainerProperty(
                 x: 0, y: 0, width: 1, height: 1,
                 borderWidth: 0, borderColor: 0, borderRadius: 0,
@@ -3516,7 +3550,7 @@ class G2: NSObject, SGCManager {
                     borderWidth: c.borderWidth, borderColor: c.borderColor,
                     borderRadius: c.borderRadius,
                     paddingLength: c.paddingLength, containerID: c.id,
-                    containerName: c.name, isEventCapture: false,
+                    containerName: c.name, isEventCapture: c.id == captureId,
                     content: c.content
                 )
             )
@@ -4905,6 +4939,13 @@ class G2: NSObject, SGCManager {
             // again → rebuild→exit→rebuild loop. Recovery is owned by one place: the
             // dashboard-close handler (and the reconcile page-down path). Don't touch
             // micEnabled (user intent) — recovery reads it to re-arm; clobbering it strands the mic.
+            if eventType == .systemExit || eventType == .abnormalExit,
+               Int64(Date().timeIntervalSince1970 * 1000) < ghostResetUntilMs
+            {
+                Bridge.log("G2: system_exit from Ghost's own page reset — ignored")
+                ghostResetExitSeen = true
+                return
+            }
             if eventType == .systemExit || eventType == .abnormalExit {
                 pageCreated = false
                 evenHubMicActive = false // firmware killed the mic with the page
@@ -5233,6 +5274,10 @@ class G2: NSObject, SGCManager {
                 return
             }
             dashboardShowing = 0
+            if Int64(Date().timeIntervalSince1970 * 1000) < ghostResetUntilMs {
+                Bridge.log("G2: dashboard-close from Ghost's own page reset — no recovery")
+                return
+            }
             recoverPageAndMic(reason: "dashboard-close")
             return
         }

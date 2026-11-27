@@ -656,6 +656,14 @@ public final class MentraBluetoothSDK {
         ])
     }
 
+    /// Ghost (G2 only): fully reset the glasses' page so the next scene starts on a clean lens
+    /// (layout change). `captureElementId`: a scene text element that receives the touches, so the
+    /// glasses scroll its text themselves; nil = the usual hidden touch box. Send the next scene with replay.
+    public func ghostResetPage(captureElementId: String? = nil) async {
+        guard let g2 = DeviceManager.shared.sgc as? G2 else { return }
+        await g2.ghostResetPage(captureElementId: captureElementId)
+    }
+
     public func clearDisplay() async throws {
         DeviceManager.shared.sgc?.clearDisplay()
     }
