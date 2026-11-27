@@ -1445,6 +1445,10 @@ final class G2ReconnectionManager {
 
 @MainActor
 class G2: NSObject, SGCManager {
+    /// Ghost: no "MentraOS Connected" text + clearDisplay 3 s after connecting. The wipe tore down the
+    /// app's first page (system_exit, rebuild storm, failed image uploads).
+    var showConnectionConfirmation: Bool { false }
+
     func sendIncidentId(_: String, apiBaseUrl _: String?) {}
 
     var type = DeviceTypes.G2
@@ -2331,7 +2335,14 @@ class G2: NSObject, SGCManager {
     /// every structural change accumulated while it was down.
     private func coalescedPageRebuild() async {
         if pageCreated {
-            await rebuildPage()
+            // Ghost: rebuild IN PLACE (rebuildPageMessage, like Even Hub's rebuildPageContainer) instead of
+            // shutdown + create. The shutdown made the firmware fire system_exit + play the load animation,
+            // then recovery rebuilt a second time.
+            // Images are held back until rebuildState marks them dirty again (300 ms after the new page),
+            // so no picture is pushed into a container the firmware hasn't created yet.
+            Bridge.log("G2: structural change — in-place rebuild (no shutdown)")
+            for i in imageContainers.indices { imageContainers[i].dirty = false }
+            await rebuildState()
         } else {
             Bridge.log("G2: structural change while page down — deferring to reconcile rebuild (no extra shutdown)")
             signalDisplayDirty()
