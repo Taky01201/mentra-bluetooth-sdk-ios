@@ -689,7 +689,7 @@ public final class MentraBluetoothSDK {
         try await setDashboardPosition(height: request.height, depth: request.depth)
     }
 
-    func setDashboardMenu(_ items: [DashboardMenuItem]) async throws {
+    public func setDashboardMenu(_ items: [DashboardMenuItem]) async throws {
         DeviceStore.shared.apply(
             ObservableStore.bluetoothCategory,
             "menu_apps",
@@ -697,7 +697,7 @@ public final class MentraBluetoothSDK {
         )
     }
 
-    func setCalendarEvents(_ events: [CalendarEvent]) async throws {
+    public func setCalendarEvents(_ events: [CalendarEvent]) async throws {
         DeviceStore.shared.apply(
             ObservableStore.bluetoothCategory,
             "calendar_events",

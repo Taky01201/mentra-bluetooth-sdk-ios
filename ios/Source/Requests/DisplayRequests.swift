@@ -45,31 +45,33 @@ public struct DashboardPositionRequest {
     }
 }
 
-struct DashboardMenuItem {
-    let title: String
-    let packageName: String
-    let values: [String: Any]
+// Ghost fork: public so apps can fill the G2 system menu. The G2 driver reads "name" (not "title")
+// and "running", so both are sent; without "name" every item was dropped.
+public struct DashboardMenuItem {
+    public let title: String
+    public let packageName: String
+    public let values: [String: Any]
 
-    init(title: String, packageName: String, values: [String: Any] = [:]) {
+    public init(title: String, packageName: String, running: Bool = false, values: [String: Any] = [:]) {
         self.title = title
         self.packageName = packageName
-        self.values = values
+        self.values = values.merging(["running": running]) { old, _ in old }
     }
 
     var dictionary: [String: Any] {
-        values.merging(["title": title, "packageName": packageName]) { _, new in new }
+        values.merging(["title": title, "name": title, "packageName": packageName]) { _, new in new }
     }
 }
 
 /// Mirrors the TS `CalendarEvent` shape: { title, location?, time, endDate }
 /// where `endDate` is unix seconds.
-struct CalendarEvent {
-    let title: String
-    let location: String?
-    let time: String
-    let endDate: Double
+public struct CalendarEvent {
+    public let title: String
+    public let location: String?
+    public let time: String
+    public let endDate: Double
 
-    init(title: String, location: String? = nil, time: String, endDate: Double) {
+    public init(title: String, location: String? = nil, time: String, endDate: Double) {
         self.title = title
         self.location = location
         self.time = time
