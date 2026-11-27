@@ -113,6 +113,9 @@ private enum OsEventType: Int32 {
     case abnormalExit = 6
     case systemExit = 7
     case imuDataReport = 8 // IMU_DATA_REPORT — Sys_ItemEvent carries imuData
+    // Ghost fork: Even Hub SDK 0.0.16 sends LONG_PRESS = 9 / RELEASE = 10 on sysEvent (unverified on this path).
+    case longPress = 9
+    case longPressRelease = 10
 }
 
 /// g2_settingCommandId from g2_setting.proto
@@ -4897,6 +4900,8 @@ class G2: NSObject, SGCManager {
         case .foregroundExit: return "foreground_exit"
         case .systemExit: return "system_exit"
         case .imuDataReport: return nil
+        case .longPress: return "long_press"
+        case .longPressRelease: return "long_press_release"
         case .abnormalExit: return nil // don't report abnormal exits as gestures
         }
     }
